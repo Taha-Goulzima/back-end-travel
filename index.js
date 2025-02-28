@@ -9,6 +9,9 @@ connection()
 app.use('/user',require('./routes/userRoutes'))
 app.use('/voyages' ,require('./routes/voyageRoutes'))
 app.use("/association", require("./routes/associationRoutes"));
+app.use("/inscription", require("./routes/inscriptionRoutes"));
+app.use("/avis", require("./routes/avisRoutes")); 
+
 
 
 

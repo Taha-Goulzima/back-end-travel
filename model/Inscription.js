@@ -16,6 +16,10 @@ const inscriptionSchema = new mongoose.Schema({
         required: true,
         min: 1
     },
+    totalPrix: {
+        type: Number, // Store total price
+        required: true
+    },
     statut: {
         type: String,
         enum: ['En attente', 'Accepté', 'Refusé'],
