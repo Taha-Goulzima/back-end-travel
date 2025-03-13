@@ -5,7 +5,9 @@ const app = express();
 app.use(express.json())
 
 connection()
+const dotenv = require("dotenv");
 
+dotenv.config();
 app.use('/user',require('./routes/userRoutes'))
 app.use('/voyages' ,require('./routes/voyageRoutes'))
 app.use("/association", require("./routes/associationRoutes"));

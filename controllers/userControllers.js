@@ -1,8 +1,8 @@
 const User = require("../model/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const{ generateToken,deCoderToken} = require("../config/jwt");
 
-const JWT_SECRET = "dev"; // Better to move this to environment variables
 
 /**
  * @description creer un compte
@@ -19,7 +19,7 @@ module.exports.registerUser = async (req, res) => {
         .status(400)
         .json({ message: "Il faut remplir tous les champs" });
     }
-
+console.log(password)
     // Vérifier si l'utilisateur existe déjà
     const userExist = await User.findOne({
       $or: [{ email }, { phone }, { nom }],
@@ -42,41 +42,21 @@ module.exports.registerUser = async (req, res) => {
     }
 
     // Hasher le mot de passe
-    const passwordHash = await bcrypt.hash(password, 10);
 
     // Créer un nouvel utilisateur avec le rôle spécifié ou par défaut
-    const newUser = await User.create({
+    const newUser = new User( {
       email,
       phone,
       nom,
-      password: passwordHash,
+      password: password,
       role: role || "user",
     });
-
-    // Retirer le mot de passe de la réponse
-    const userResponse = newUser.toObject();
-    delete userResponse.password;
-
-    res.status(201).json({ newUser: userResponse });
+    await newUser.save()
+    console.log(newUser)
+    return res.status(201).json({ user: newUser });
   } catch (error) {
-    if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors).map((err) => err.message);
-      return res.status(400).json({ message: messages.join(", ") });
-    }
-
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      const fieldMap = {
-        email: "L'email",
-        phone: "Le numéro de téléphone",
-        nom: "Le nom",
-      };
-      return res.status(400).json({
-        message: `${fieldMap[field]} existe déjà`,
-      });
-    }
-
-    res.status(500).json({ message: error.message });
+    console.error("⛔ Error Creating User:", error);
+    return res.status(500).json({ error: "Error creating user" });
   }
 };
 
@@ -89,45 +69,35 @@ module.exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Il faut remplir tous les champs" });
-    }
+    const user = await User.findOne({ email });
+    console.log(user);
+    if (!user)
+      return res.status(401).json({ error: "Invalid email or password" });
 
-    const userExist = await User.findOne({ email });
-    if (!userExist) {
-      return res
-        .status(400)
-        .json({ message: "Email ou mot de passe incorrect" });
-    }
+      const isMatch = await user.matchPassword(password);
+    console.log(isMatch)
+    if (!isMatch)
+      return res.status(401).json({ error: "Invalid email or password" });
 
-    const isPassword = await bcrypt.compare(password, userExist.password);
-    if (!isPassword) {
-      return res
-        .status(400)
-        .json({ message: "Email ou mot de passe incorrect" });
-    }
+     
+      const userResponse = {
+        _id: user._id,
+        nom: user.nom,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
 
-    const token = jwt.sign(
-      {
-        _id: userExist._id,
-        role: userExist.role,
-      },
-      JWT_SECRET,
-      { expiresIn: "4h" }
-    );
-
+      };
+  
+    const token = generateToken(userResponse);
     // Send user info along with token
-    const userResponse = userExist.toObject();
-    delete userResponse.password;
-
-    res.status(200).json({
+    
+    return res.status(200).json({
       token,
       user: userResponse,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -138,14 +108,17 @@ module.exports.loginUser = async (req, res) => {
  */
 module.exports.getAllUsers = async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
+    const token = req.header("Authorization");
+    console.log(token);
+    const deCoded = await deCoderToken(token.replace("Bearer ", ""))
+    if (deCoded.user.role !== "admin") {
       return res.status(403).json({ message: "Vous n'êtes pas autorisé" });
     }
 
     const users = await User.find().select("-password");
-    res.status(200).json({ users });
+   return res.status(200).json({ users });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -168,9 +141,9 @@ module.exports.deleteUser = async (req, res) => {
       return res.status(404).json({ message: "L'utilisateur n'existe pas" });
     }
 
-    res.status(200).json({ message: "Utilisateur supprimé avec succès" });
+    return res.status(200).json({ message: "Utilisateur supprimé avec succès" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+     return res.status(500).json({ message: error.message });
   }
 };
 
@@ -179,21 +152,11 @@ module.exports.deleteUser = async (req, res) => {
  * @router /user/:id
  * @method PUT
  */
-module.exports.editProfile = async (req, res) => {
+module.exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
-
-    // Vérifier si l'utilisateur est admin ou modifie son propre profil
-    if (req.user.role !== "admin" && req.user._id.toString() !== id) {
-      return res.status(403).json({ message: "Vous n'êtes pas autorisé" });
-    }
-
-    // Si le mot de passe est fourni, le hasher
-    if (updateData.password) {
-      updateData.password = await bcrypt.hash(updateData.password, 10);
-    }
-
+   
     // Empêcher la modification du rôle sauf pour les admins
     if (updateData.role && req.user.role !== "admin") {
       delete updateData.role;
@@ -208,11 +171,11 @@ module.exports.editProfile = async (req, res) => {
       return res.status(404).json({ message: "L'utilisateur n'existe pas" });
     }
 
-    res.status(200).json({ user: editUser });
+    return  res.status(200).json({ user: editUser });
   } catch (error) {
     if (error.name === "ValidationError") {
       return res.status(400).json({ message: error.message });
     }
-    res.status(500).json({ message: error.message });
+   return res.status(500).json({ message: error.message });
   }
 };
