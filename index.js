@@ -1,20 +1,17 @@
-const express = require('express');
-const connection = require('./config/connectionDb')
+const express = require("express");
+const connection = require("./config/connectionDb");
+const dotenv = require("dotenv");
+dotenv.config();
 
 const app = express();
-app.use(express.json())
+app.use(express.json());
 
-connection()
-const dotenv = require("dotenv");
+connection();
 
-dotenv.config();
-app.use('/user',require('./routes/userRoutes'))
-app.use('/voyages' ,require('./routes/voyageRoutes'))
+app.use("/user", require("./routes/userRoutes"));
+app.use("/voyages", require("./routes/voyageRoutes"));
 app.use("/association", require("./routes/associationRoutes"));
 app.use("/inscription", require("./routes/inscriptionRoutes"));
-app.use("/avis", require("./routes/avisRoutes")); 
+app.use("/avis", require("./routes/avisRoutes"));
 
-
-
-
-app.listen(5000,console.log('server listening on port 5000'))
+app.listen(5000, console.log("server listening on port 5000"));

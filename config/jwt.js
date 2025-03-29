@@ -6,7 +6,11 @@ const generateToken = (user) => {
     });
   };
   const deCoderToken = async (token)=>{
-    console.log(token);
     return await jwt.verify(token, process.env.JWT_SECRET);
   }
-  module.exports = {generateToken, deCoderToken} ;
+  const getRoleFromToken = async (token)=>{
+    const decoded = await deCoderToken(token);
+    return decoded.user.role;
+    
+  }
+  module.exports = {generateToken, deCoderToken, getRoleFromToken} ;
